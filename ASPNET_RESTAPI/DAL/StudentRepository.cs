@@ -10,26 +10,19 @@ namespace ASPNET_RESTAPI.DAL {
             this._dbContext = dbContext;
         }
 
-        public IReadOnlyCollection<StudentPreview> List() {
-            var Students = new List<StudentPreview>();
-            foreach (var dbStudent in _dbContext.Students) {
-                Students.Add(new StudentPreview(dbStudent));
-            }
-            return Students;
+        public async Task<IReadOnlyCollection<StudentPreview>> ListAsync() {
+            var students = await _dbContext.Students.ToListAsync();
+            return students.Select(s => new StudentPreview(s)).ToList();
         }
 
-        public bool TryGetStudentByNeptun(string neptunCode, out Student? Student) {
-            var studentEntity = _dbContext.Students.FirstOrDefault(s => s.NEPTUN == neptunCode);
-            if (studentEntity == null) {
-                Student = null;
-                return false;
-            }
+        public async Task<(bool, Student?)> GetStudentByNeptunAsync(string neptunCode) {
+            var studentEntity = await _dbContext.Students.FirstOrDefaultAsync(s => s.NEPTUN == neptunCode);
+            if (studentEntity == null)
+                return (false, null);
 
-            var dbMajor = _dbContext.Majors.FirstOrDefault(m => m.ID == studentEntity.MajorId);
-            if (dbMajor == null) {
-                Student = null;
-                return false;
-            }
+            var dbMajor = await _dbContext.Majors.FirstOrDefaultAsync(m => m.ID == studentEntity.MajorId);
+            if (dbMajor == null)
+                return (false, null);
 
             var studentCourses = new List<StudentCourse>();
 
@@ -39,7 +32,7 @@ namespace ASPNET_RESTAPI.DAL {
                 .Where(ca => ca.Student.NEPTUN == neptunCode)
                 .GroupBy(ca => ca.Course.ID);
 
-            foreach (var group in query) {
+            await foreach (var group in query.AsAsyncEnumerable()) {
                 var course = group.First().Course;
 
                 studentCourses.Add(new StudentCourse {
@@ -53,24 +46,14 @@ namespace ASPNET_RESTAPI.DAL {
                 });
             }
 
-            Student = new Student(studentEntity, dbMajor.Name, studentCourses);
-            return true;
+            var student = new Student(studentEntity, dbMajor.Name, studentCourses);
+            return (true, student);
         }
 
-        public bool TryGetStudentNeptunByName(string studentName, out string neptun) {
-            var studentEntity = _dbContext.Students.FirstOrDefault(s => s.Name == studentName);
-            if (studentEntity == null) {
-                neptun = "";
+        public async Task<bool> AddStudentAsync(Student student) {
+            var major = await _dbContext.Majors.FirstOrDefaultAsync(m => m.Name == student.Major);
+            if (major == null)
                 return false;
-            }
-
-            neptun = studentEntity.NEPTUN;
-            return true;
-        }
-
-        public bool AddStudent(Student student) {
-            var major = _dbContext.Majors.FirstOrDefault(m => m.Name == student.Major);
-            if (major == null) return false;
 
             var newStudent = new DbStudent {
                 NEPTUN = student.NEPTUN,
@@ -80,19 +63,26 @@ namespace ASPNET_RESTAPI.DAL {
                 MajorId = major.ID,
             };
 
-            _dbContext.Students.Add(newStudent);
-            _dbContext.SaveChanges();
-            _dbContext.Entry(newStudent).Reload();
-            return true;
+            try {
+                _dbContext.Students.Add(newStudent);
+                await _dbContext.SaveChangesAsync();
+                await _dbContext.Entry(newStudent).ReloadAsync();
+                return true;
+            }
+            catch (Exception ex) {
+                Console.WriteLine(ex);
+                return false;
+            }
         }
 
-        public bool DeleteStudent(string neptun) {
-            var delStudent = _dbContext.Students.FirstOrDefault(m => m.NEPTUN == neptun);
-            if (delStudent == null) return false;
+        public async Task<bool> DeleteStudentAsync(string neptun) {
+            var delStudent = await _dbContext.Students.FirstOrDefaultAsync(m => m.NEPTUN == neptun);
+            if (delStudent == null)
+                return false;
 
             try {
                 _dbContext.Students.Remove(delStudent);
-                _dbContext.SaveChanges();
+                await _dbContext.SaveChangesAsync();
                 _dbContext.ChangeTracker.Clear(); //refresh db cascade után
                 return true;
             }
@@ -102,12 +92,14 @@ namespace ASPNET_RESTAPI.DAL {
             }
         }
 
-        public bool AddCourseAttempt(string neptun, int courseId, CourseAttempt newAttempt) {
-            var student = _dbContext.Students.FirstOrDefault(s => s.NEPTUN == neptun);
-            if (student == null) return false;
+        public async Task<bool> AddCourseAttemptAsync(string neptun, int courseId, CourseAttempt newAttempt) {
+            var student = await _dbContext.Students.FirstOrDefaultAsync(s => s.NEPTUN == neptun);
+            if (student == null)
+                return false;
 
-            var course = _dbContext.Courses.FirstOrDefault(c => c.ID == courseId);
-            if (course == null) return false;
+            var course = await _dbContext.Courses.FirstOrDefaultAsync(c => c.ID == courseId);
+            if (course == null)
+                return false;
 
             var dbAttempt = new DbCourseAttempt {
                 StudentID = student.ID,
@@ -117,8 +109,8 @@ namespace ASPNET_RESTAPI.DAL {
 
             try {
                 _dbContext.CourseAttempts.Add(dbAttempt);
-                _dbContext.SaveChanges();
-                _dbContext.Entry(dbAttempt).Reload();
+                await _dbContext.SaveChangesAsync();
+                await _dbContext.Entry(dbAttempt).ReloadAsync();
                 return true;
             }
             catch (Exception ex) {

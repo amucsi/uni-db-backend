@@ -12,31 +12,37 @@ namespace ASPNET_RESTAPI.Controllers {
         }
 
         [HttpGet("all")]
-        public ActionResult<IEnumerable<Major>> GetAllMajors() {
-            return Ok(majorRepository.List());
+        public async Task<ActionResult<IEnumerable<Major>>> GetAllMajorsAsync() {
+            return Ok(await majorRepository.ListAsync());
         }
 
         [HttpGet("{id}")]
-        public ActionResult<Major> GetMajorById(int id) {
-            if (majorRepository.TryGetMajorById(id,  out var major)) 
+        public async Task<ActionResult<Major>> GetMajorByIdAsync(int id) {
+            (bool success, Major? major) = await majorRepository.GetMajorByIdAsync(id);
+            if (success)
                 return Ok(major);
             else
                 return NotFound();
         }
 
         [HttpPost("add")]
-        public ActionResult AddMajor([FromBody] Major major) {
-            if (!majorRepository.AddMajor(major)) return BadRequest();
-
-            return Ok(major);
+        public async Task<ActionResult> AddMajorAsync([FromBody] Major major) {
+            if (!await majorRepository.AddMajorAsync(major))
+                return BadRequest();
+            else
+                return CreatedAtAction(
+                    nameof(GetMajorByIdAsync),
+                    new { id = major.ID },
+                    major
+                );
         }
 
         [HttpDelete("{id}")]
-        public ActionResult DeleteMajorById(int id) {
-            if (!majorRepository.DeleteMajor(id))
+        public async Task<ActionResult> DeleteMajorByIdAsync(int id) {
+            if (!await majorRepository.DeleteMajorAsync(id))
                 return NotFound();
-
-            return NoContent();
+            else
+                return NoContent();
         }
     }
 }

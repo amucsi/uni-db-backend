@@ -1,5 +1,6 @@
 ﻿using ASPNET_RESTAPI.DbModel;
 using ASPNET_RESTAPI.Model;
+using Microsoft.EntityFrameworkCore;
 
 namespace ASPNET_RESTAPI.DAL {
     public class MajorRepository {
@@ -9,33 +10,27 @@ namespace ASPNET_RESTAPI.DAL {
             this._dbContext = dbContext;
         }
 
-        public IReadOnlyCollection<Major> List() {
-            var Majors = new List<Major>();
-            foreach (var major in _dbContext.Majors) {
-                Majors.Add(new Major(major));
-            }
-            return Majors;
+        public async Task<IReadOnlyCollection<Major>> ListAsync() {
+            var majors = await _dbContext.Majors.ToListAsync();
+            return majors.Select(m => new Major(m)).ToList();
         }
 
-        public bool TryGetMajorById(int majorId, out Major? major) {
-            var dbMajor = _dbContext.Majors.FirstOrDefault(m => m.ID == majorId);
-            if (dbMajor == null) {
-                major = null;
-                return false;
-            }
-
-            major = new Major(dbMajor);
-            return true;
+        public async Task<(bool, Major?)> GetMajorByIdAsync(int majorId) {
+            var dbMajor = await _dbContext.Majors.FirstOrDefaultAsync(m => m.ID == majorId);
+            if (dbMajor == null)
+                return (false, null);
+            else
+                return (true, new Major(dbMajor));
         }
 
-        public bool AddMajor(Major major) {
+        public async Task<bool> AddMajorAsync(Major major) {
             var dbMajor = new DbMajor {
                 Name = major.Name,
             };
             try {
                 _dbContext.Majors.Add(dbMajor);
-                _dbContext.SaveChanges();
-                _dbContext.Entry(dbMajor).Reload();
+                await _dbContext.SaveChangesAsync();
+                await _dbContext.Entry(dbMajor).ReloadAsync();
                 return true;
             }
             catch (Exception ex) {
@@ -44,13 +39,14 @@ namespace ASPNET_RESTAPI.DAL {
             }
         }
 
-        public bool DeleteMajor(int majorId) {
-            var delMajor = _dbContext.Majors.FirstOrDefault(m => m.ID == majorId);
-            if (delMajor == null) return false;
+        public async Task<bool> DeleteMajorAsync(int majorId) {
+            var delMajor = await _dbContext.Majors.FirstOrDefaultAsync(m => m.ID == majorId);
+            if (delMajor == null)
+                return false;
 
             try {
                 _dbContext.Majors.Remove(delMajor);
-                _dbContext.SaveChanges();
+                await _dbContext.SaveChangesAsync();
                 return true;
             }
             catch (Exception ex) {

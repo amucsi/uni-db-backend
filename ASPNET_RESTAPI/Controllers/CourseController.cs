@@ -12,31 +12,37 @@ namespace ASPNET_RESTAPI.Controllers {
         }
 
         [HttpGet("all")]
-        public async Task<ActionResult<IEnumerable<Course>>> GetAllAsync() {
+        public async Task<ActionResult<IEnumerable<Course>>> GetAllCoursesAsync() {
             return Ok(await courseRepository.ListAsync());
         }
 
         [HttpGet("{id}")]
-        public ActionResult<Course> GetCourseById(int id) {
-            if (courseRepository.TryGetCourseById(id, out var course))
+        public async Task<ActionResult<Course>> GetCourseByIdAsync(int id) {
+            (bool success, Course? course) = await courseRepository.GetCourseByIdAsync(id);
+            if (success)
                 return Ok(course);
             else
                 return NotFound();
         }
 
         [HttpPost("add")]
-        public ActionResult AddCourse([FromBody] Course course) {
-            if (!courseRepository.AddCourse(course)) return BadRequest();
-
-            return Ok(course);
+        public async Task<ActionResult> AddCourseAsync([FromBody] Course course) {
+            if (!await courseRepository.AddCourseAsync(course))
+                return BadRequest();
+            else
+                return CreatedAtAction(
+                    nameof(GetCourseByIdAsync),
+                    new { id = course.ID },
+                    course
+                );
         }
 
         [HttpDelete("{id}")]
-        public ActionResult DeleteCourseById(int id) {
-            if (!courseRepository.DeleteCourse(id))
+        public async Task<ActionResult> DeleteCourseByIdAsync(int id) {
+            if (!await courseRepository.DeleteCourseAsync(id))
                 return NotFound();
-
-            return NoContent();
+            else
+                return NoContent();
         }
     }
 }

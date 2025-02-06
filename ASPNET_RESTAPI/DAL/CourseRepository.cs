@@ -1,5 +1,6 @@
 ﻿using ASPNET_RESTAPI.DbModel;
 using ASPNET_RESTAPI.Model;
+using Microsoft.EntityFrameworkCore;
 
 namespace ASPNET_RESTAPI.DAL {
     public class CourseRepository {
@@ -10,28 +11,19 @@ namespace ASPNET_RESTAPI.DAL {
         }
 
         public async Task<IReadOnlyCollection<Course>> ListAsync() {
-            var Courses = new List<Course>();
-            foreach (var course in _dbContext.Courses) {
-                Courses.Add(new Course(course));
-            }
-            return Courses;
-
-            //var courses = await _dbContext.Courses.ToListAsync();
-            //return courses.Select(course => new Course(course)).ToList();
+            var courses = await _dbContext.Courses.ToListAsync();
+            return courses.Select(c => new Course(c)).ToList();
         }
 
-        public bool TryGetCourseById(int id, out Course? course) {
-            var dbCourse = _dbContext.Courses.FirstOrDefault(c => c.ID == id);
-            if (dbCourse == null) {
-                course = null;
-                return false;
-            }
-
-            course = new Course(dbCourse);
-            return true;
+        public async Task<(bool, Course?)> GetCourseByIdAsync(int id) {
+            var dbCourse = await _dbContext.Courses.FirstOrDefaultAsync(c => c.ID == id);
+            if (dbCourse == null)
+                return (false, null);
+            else
+                return (true, new Course(dbCourse));
         }
 
-        public bool AddCourse(Course course) {
+        public async Task<bool> AddCourseAsync(Course course) {
             var dbCourse = new DbCourse {
                 Name = course.Name,
                 Semester = course.Semester,
@@ -39,8 +31,8 @@ namespace ASPNET_RESTAPI.DAL {
             };
             try {
                 _dbContext.Courses.Add(dbCourse);
-                _dbContext.SaveChanges();
-                _dbContext.Entry(dbCourse).Reload();
+                await _dbContext.SaveChangesAsync();
+                await _dbContext.Entry(dbCourse).ReloadAsync();
                 return true;
             }
             catch (Exception ex) {
@@ -49,13 +41,14 @@ namespace ASPNET_RESTAPI.DAL {
             }
         }
 
-        public bool DeleteCourse(int id) {
-            var delCourse = _dbContext.Courses.FirstOrDefault(c =>  c.ID == id);
-            if (delCourse == null) return false;
+        public async Task<bool> DeleteCourseAsync(int id) {
+            var delCourse = await _dbContext.Courses.FirstOrDefaultAsync(c =>  c.ID == id);
+            if (delCourse == null)
+                return false;
 
             try {
                 _dbContext.Courses.Remove(delCourse);
-                _dbContext.SaveChanges();
+                await _dbContext.SaveChangesAsync();
                 return true;
             }
             catch (Exception ex) {
